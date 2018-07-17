@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>#canhelpwith Result</title>
+  </head>
+  <body>
+        {{range $index, $element := .}}
+        <div style="border:1px solid black;">
+            <p><b>Score: {{$element.Score}}</b></p>
+            <p>{{$element.Name}}</p>
+            <p>{{$element.Message}}</p>
+            <a href="{{$element.URL}}">Original Toot</a>
+            <br>
+        </div>
+        {{end}}
+        <p>End of Results.</p>
+  </body>
+</html>
