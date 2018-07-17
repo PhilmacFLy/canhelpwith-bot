@@ -6,6 +6,7 @@
 *.dylib
 canhelpwith-bot
 config.json
+toot.bleve/
 
 # Test binary, build with `go test -c`
 *.test
