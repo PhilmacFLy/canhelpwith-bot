@@ -33,11 +33,16 @@ type config struct {
 	Adress         string
 }
 
-type status struct {
+type Status struct {
+	ID      string
 	Name    string
 	Message template.HTML
 	Score   float64
 	URL     string
+}
+
+func (s *Status) Type() string {
+	return "Status"
 }
 
 func loadConfig(path string) (config, error) {
@@ -99,7 +104,12 @@ func addStatitoIndex(c config, client *madon.Client) {
 		}
 	}
 	for _, s := range stati {
-		index.Index(strconv.FormatInt(s.ID, 10), s)
+		var st Status
+		st.ID = strconv.FormatInt(s.ID, 10)
+		st.Name = s.Account.DisplayName + " / " + s.Account.Username
+		st.URL = s.URL
+		st.Message = template.HTML(s.Content)
+		index.Index(st.ID, s)
 	}
 
 }
@@ -127,10 +137,10 @@ func resultHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Error executing search:", err)
 	}
 	searchRequest.SortBy([]string{"-_score"})
-	var stati []status
-	for _, res := range searchResult.Hits {
-		var st status
-		id, err := strconv.ParseInt(res.ID, 10, 64)
+	var stati []Status
+	for i, res := range searchResult.Hits {
+		//var st status
+		/*id, err := strconv.ParseInt(res.ID, 10, 64)
 		if err != nil {
 			fmt.Println(w, "Error parsing Integer:", err)
 			return
@@ -144,7 +154,11 @@ func resultHandler(w http.ResponseWriter, r *http.Request) {
 		st.URL = s.URL
 		st.Message = template.HTML(s.Content)
 		st.Score = res.Score
-		stati = append(stati, st)
+		stati = append(stati, st)*/
+		fmt.Println(i, res)
+		for k, v := range res.Fields {
+			fmt.Printf("Field %v. Value %v.\n", k, v)
+		}
 	}
 	showtemplate(w, "templates/result.html", stati)
 }
@@ -162,14 +176,32 @@ func frontendHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var err error
 
+	log.Println("Loading Config")
+	c, err := loadConfig("")
+	if err != nil {
+		log.Fatal("Error loading Config:", err)
+	}
+
 	_, err = os.Stat("toot.bleve")
 	if os.IsNotExist(err) {
 		log.Println("Creating Search Index")
+		statusMapping := bleve.NewDocumentMapping()
+		messageFieldMapping := bleve.NewTextFieldMapping()
+		messageFieldMapping.Analyzer = "en"
+		statusMapping.AddFieldMappingsAt("Message", messageFieldMapping)
+		nameFieldMapping := bleve.NewTextFieldMapping()
+		nameFieldMapping.Analyzer = "en"
+		statusMapping.AddFieldMappingsAt("Name", nameFieldMapping)
+		urlFieldMapping := bleve.NewTextFieldMapping()
+		urlFieldMapping.Index = false
+		statusMapping.AddFieldMappingsAt("URL", urlFieldMapping)
 		mapping := bleve.NewIndexMapping()
+		mapping.AddDocumentMapping("Status", statusMapping)
 		index, err = bleve.New("toot.bleve", mapping)
 		if err != nil {
 			log.Fatal("Error creating Index:", err)
 		}
+		c.HashtagScanned = make(map[string]int64)
 	} else {
 		if err == nil {
 			index, err = bleve.Open("toot.bleve")
@@ -181,14 +213,6 @@ func main() {
 		}
 	}
 
-	log.Println("Loading Config")
-	c, err := loadConfig("")
-	if err != nil {
-		log.Fatal("Error loading Config:", err)
-	}
-	if c.HashtagScanned == nil {
-		c.HashtagScanned = make(map[string]int64)
-	}
 	if (c.AppID != "") && (c.AppSecret != "") {
 		client, err = madon.NewApp(c.AppName, c.Webpage, c.Permissions, madon.NoRedirect, c.Instance)
 		if err != nil {
